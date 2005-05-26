@@ -21,5 +21,11 @@ clean::
 
 clean:: clean-doc
 
+PACKAGE = SpiderCaml-0.1
+.PHONY: package
+package: clean
+	(cd ..; cp -aR SpiderCaml $(PACKAGE); \
+	tar czf $(PACKAGE).tar.gz --exclude CVS $(PACKAGE); \
+	rm -Rf $(PACKAGE))
 
 -include OCamlMakefile
