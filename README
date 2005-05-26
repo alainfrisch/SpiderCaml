@@ -1,0 +1,44 @@
+SpiderCaml: bindings to SpiderMonkey's implementation of Javascript
+
+License:
+  Copyright 2005 by Alain Frisch and INRIA
+  distributed under the terms of an MIT-like license : see LICENSE
+
+Author:
+  email: Alain.Frisch@inria.fr
+  web: http://www.eleves.ens.fr/home/frisch
+
+--------------------------------------------------------------------------
+Overview
+
+SpiderMonkey is the historic implementation of Javascript from
+Netscape, now part of the Mozilla project. For more information:
+
+    http://www.mozilla.org/js/spidermonkey/
+
+
+SpiderCaml is a library to use SpiderMonkey from OCaml. In other
+words, it allows OCaml developpers to embed a Javascript interpreter
+in their applications.
+
+--------------------------------------------------------------------------
+Compilation 
+
+SpiderCaml depends on an already installed SpiderMonkey. Debian
+users can use the libsmjs-dev package. Otherwise, you may need to
+modify the library name and location in Makefile.
+
+  make all
+  make opt
+  make install (requires findlib)
+
+--------------------------------------------------------------------------
+Documentation
+
+  make htdoc
+
+--------------------------------------------------------------------------
+Examples
+
+In the samples/ subdirectory. Currently, there is only a very simple
+Javascript shell. The Makefile requires the library to be findlib-installed.
