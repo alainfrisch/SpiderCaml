@@ -77,6 +77,8 @@ class type jsobj = object
   method float : float -> jsobj
   method array : jsobj array -> jsobj
 
+  (** Value inspection. *)
+
   method is_object : bool
   method is_bool : bool
   method is_int : bool

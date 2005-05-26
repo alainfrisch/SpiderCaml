@@ -28,4 +28,11 @@ package: clean
 	tar czf $(PACKAGE).tar.gz --exclude CVS $(PACKAGE); \
 	rm -Rf $(PACKAGE))
 
+release:
+	$(MAKE) package
+	mv ../$(PACKAGE).tar.gz ../public_html/SpiderCaml/download
+	$(MAKE) htdoc
+	rm -Rf ../public_html/SpiderCaml/doc
+	mv doc/spiderCaml/html ../public_html/SpiderCaml/doc
+
 -include OCamlMakefile
