@@ -49,6 +49,8 @@ typedef struct caml_js_rt caml_js_rt;
 #define rt_info(rt) ((caml_js_rt *) JS_GetRuntimePrivate(rt))
 #define get_rt(v) (*((JSRuntime**)Data_custom_val(v)))
 #define rt_ocaml_obj(rt,id) (Field(rt_info(rt)->ocaml_objs,id))
+#define release_ocaml_obj(rt,id) Store_field(rt_info(rt)->ocaml_objs,id,Val_int(0))
+/* TODO: re-use the slot (keep a freelist in ocaml_objs) */
 
 #define check_rt_alive(rt) \
   if (!rt_info(rt)->ocaml_objs) \
@@ -194,14 +196,6 @@ static struct custom_operations caml_js_ctx_ops = {
   custom_deserialize_default
 };
 
-
-JSClass caml_js_class = {
-  "caml_js_class",0,
-  JS_PropertyStub,JS_PropertyStub,JS_PropertyStub,JS_PropertyStub,
-  JS_EnumerateStub,JS_ResolveStub,JS_ConvertStub,JS_FinalizeStub
-};
-
-
 static value caml_js_wrap_context(JSContext *cx) {
   value b = alloc_custom(&caml_js_ctx_ops,sizeof(JSContext*),1,10000);
   get_ctx(b) = cx;
@@ -209,7 +203,19 @@ static value caml_js_wrap_context(JSContext *cx) {
   return b;
 }
 
-#define copy_str(s) strcpy((char*) malloc(strlen(s)),s)
+static JSBool caml_js_custom_getProperty(JSContext*,JSObject*,jsval,jsval*);
+static JSBool caml_js_custom_setProperty(JSContext*,JSObject*,jsval,jsval*);
+static void caml_js_custom_finalize(JSContext*,JSObject*);
+
+JSClass caml_js_class = {
+  "caml_js_class",JSCLASS_HAS_PRIVATE,
+  JS_PropertyStub,JS_PropertyStub,
+  caml_js_custom_getProperty,caml_js_custom_setProperty,
+  JS_EnumerateStub,JS_ResolveStub,JS_ConvertStub,caml_js_custom_finalize
+};
+
+
+#define copy_str(s) strcpy((char*) malloc(strlen(s)+1),s)
 #define opt_copy_str(s) (s?copy_str(s):NULL)
 
 static void caml_js_error_reporter(JSContext *cx, const char *message,
@@ -222,11 +228,11 @@ static void caml_js_error_reporter(JSContext *cx, const char *message,
   err->filename = opt_copy_str(report->filename);
   err->line = opt_copy_str(report->linebuf);
   err->lineno = report->lineno;
-  err->colno = report->tokenptr - report->linebuf;
+  err->colno = (report->linebuf?report->tokenptr - report->linebuf:0);
 }
 
-CAMLprim value caml_js_new_context(value rtv) {
-  CAMLparam0();
+CAMLprim value caml_js_new_context(value rtv,value ops) {
+  CAMLparam2(rtv,ops);
   CAMLlocal1(b);
 
   JSRuntime *rt = caml_js_get_rt(rtv);
@@ -238,6 +244,8 @@ CAMLprim value caml_js_new_context(value rtv) {
   rt_info(rt)->ref++;
 
   JSObject *obj = JS_NewObject(cx, &caml_js_class, 0, 0);
+  int slot = (Is_block(ops)?caml_js_register_ocaml_obj(rt,Field(ops,0)):(-1));
+  JS_SetPrivate(cx,obj,(void*) (slot << 1));
   JS_InitStandardClasses(cx, obj);
 
   b = alloc_custom(&caml_js_ctx_ops,sizeof(JSContext*),1,10000);
@@ -248,6 +256,7 @@ CAMLprim value caml_js_new_context(value rtv) {
   ctx->ref = 1;
   ctx->last_error.message = NULL;
   ctx->last_error.filename = NULL;
+  ctx->last_error.line = NULL;
 
   JS_SetErrorReporter(cx, caml_js_error_reporter);
 
@@ -365,7 +374,7 @@ CAMLprim value caml_js_to_string(value ctx, value v){
   if (v == caml_js_true) {  CAMLreturn(copy_string("true")); }
   if (v == caml_js_false) {  CAMLreturn(copy_string("false")); }
   if (v == caml_js_null) {  CAMLreturn(copy_string("null")); }
-  if (v == caml_js_void) {  CAMLreturn(copy_string("void")); }
+  if (v == caml_js_void) {  CAMLreturn(copy_string("undefined")); }
 
   caml_js_val *data = get_val(v);
   JSContext *cx = get_ctx(ctx);
@@ -576,15 +585,20 @@ CAMLprim value caml_js_get_elem(value cx, value obj, value idx){
   CAMLreturn(jsval_to_caml(rt,ret));
 }
 
-CAMLprim value caml_js_new_object(value cx, value proto, value parent, value unit){
-  CAMLparam3(cx,proto,parent);
+
+
+
+
+CAMLprim value caml_js_new_object(value cx, value proto, value parent, value ops){
+  CAMLparam4(cx,proto,parent,ops);
   JSContext *ctx = get_ctx(cx);
   JSRuntime *rt = JS_GetRuntime(ctx);
   JSObject *oproto = (Is_long(proto)?NULL:unwrap_obj(rt,Field(proto,0)));
   JSObject *oparent = (Is_long(parent)?NULL:unwrap_obj(rt,Field(parent,0)));
-  CAMLreturn
-    (wrap_obj(rt,
-	      JS_NewObject(ctx,&caml_js_class,oproto,oparent)));
+  JSObject *obj = JS_NewObject(ctx,&caml_js_class,oproto,oparent);
+  int slot = (Is_block(ops)?caml_js_register_ocaml_obj(rt,Field(ops,0)):(-1));
+  JS_SetPrivate(ctx,obj,(void*) (slot << 1));
+  CAMLreturn(wrap_obj(rt,obj));
 }
 
 
@@ -632,4 +646,36 @@ CAMLprim value caml_js_get_version(value cx){
 CAMLprim value caml_js_set_version(value cx, value v){
   JS_SetVersion(get_ctx(cx),Int_val(v));
   return Val_int(0);
+}
+
+
+
+#define getset_prop(funname,meth) \
+static JSBool funname			\
+(JSContext *cx, JSObject *obj, jsval id, jsval *vp){		\
+  CAMLparam0();							\
+  CAMLlocal5(o,prop_name,prop_val,ctx,res);			\
+  JSRuntime *rt = JS_GetRuntime(cx);				\
+  int slot = ((int) JS_GetPrivate(cx,obj)) >> 1;		\
+  if (slot != (-1)) {						\
+    o = Field(rt_ocaml_obj(rt,slot),meth);			\
+    prop_name = jsstring_to_caml(JS_ValueToString(cx, id));	\
+    prop_val = jsval_to_caml(rt,*vp);				\
+    ctx = caml_js_wrap_context(cx);				\
+    res = callback3(o,ctx,prop_name,prop_val);			\
+    *vp = caml_to_jsval(rt,res);				\
+  }								\
+  CAMLreturn(JS_TRUE);						\
+}
+
+getset_prop(caml_js_custom_getProperty,0);
+getset_prop(caml_js_custom_setProperty,1);
+
+
+static void caml_js_custom_finalize(JSContext *cx, JSObject *obj){
+  JSRuntime *rt = JS_GetRuntime(cx);			
+  int slot = ((int) JS_GetPrivate(cx,obj)) >> 1;      	
+  if (slot != (-1)) {	
+    release_ocaml_obj(rt,slot);
+  }
 }

@@ -1,6 +1,6 @@
 SOURCES= spiderCaml_stubs.c spiderCaml.mli spiderCaml.ml
 CLIBS = smjs
-CFLAGS = -I /usr/include/smjs
+CFLAGS = -Wall -I /usr/include/smjs
 RESULT = spiderCaml
 CC = gcc
 

@@ -17,7 +17,11 @@ module Error = struct
   let _ = Callback.register_exception "js eval error" (Message (Obj.magic 0))
 end
 
+type jsval
+type jsctx
 
+type objop = jsctx -> string -> jsval -> jsval
+type objops = objop * objop
 
 module Rt = struct
   type t
@@ -26,15 +30,15 @@ module Rt = struct
 end
 
 module Ctx = struct
-  type t
-  external create: Rt.t -> t = "caml_js_new_context"
+  type t = jsctx
+  external create: Rt.t -> objops option -> t = "caml_js_new_context"
   external runtime: t -> Rt.t = "caml_js_rt_of_context"
   external version: t -> int = "caml_js_get_version"
   external set_version: t -> int -> unit = "caml_js_set_version"
 end
 
 module Val = struct
-  type t
+  type t = jsval
   external runtime: t -> Rt.t = "caml_js_rt_of_value"
   external lambda: Ctx.t -> string -> (Ctx.t -> t array -> t) -> t = "caml_js_new_function"
   external int: int -> t = "%identity"
@@ -81,7 +85,8 @@ module Val = struct
   external get_prop: Ctx.t -> t -> string -> t = "caml_js_get_prop"
   external set_elem: Ctx.t -> t -> int -> t -> unit = "caml_js_set_elem"
   external get_elem: Ctx.t -> t -> int -> t = "caml_js_get_elem"
-  external create: Ctx.t -> ?proto:t -> ?parent:t -> unit -> t = "caml_js_new_object"
+  external create: Ctx.t -> ?proto:t -> ?parent:t -> 
+    objops option -> t = "caml_js_new_object"
 
   external array: Ctx.t -> t = "caml_js_new_array"
 end
@@ -91,7 +96,22 @@ external eval_script: Ctx.t -> Val.t -> string -> Val.t = "caml_js_evaluate_scri
 
 (* Simplified API *)
 
-type jsval = Val.t
+let getProp cx prop v =
+  Printf.printf "Get prop %s = %s\n" prop (Val.to_string cx v);
+  v
+
+type 'a active = {
+  setter: string -> 'a -> 'a;
+  getter: string -> 'a -> 'a;
+}
+   
+let mkobjops new_jsobj active =
+  match active with None -> None | Some cls ->
+    Some ((fun cx_run prop v -> 
+	     (cls.getter prop (new_jsobj cx_run v)) # v),
+	  (fun cx_run prop v -> 
+	     (cls.setter prop (new_jsobj cx_run v)) # v))
+
 
 class jsobj cx o = object(this:'this)
   method v = o
@@ -100,15 +120,19 @@ class jsobj cx o = object(this:'this)
   method set_idx n (v : jsobj) = Val.set_elem cx o n (v#v)
   method get_idx n = new jsobj cx (Val.get_elem cx o n)
 
-  method new_child ?proto () =
+  method new_object_gen ?proto ?parent ?active () =
     let proto = 
       match proto with None -> None | Some (x : jsobj) -> Some (x # v) in
-    new jsobj cx (Val.create cx ?proto ~parent:o ())
+    let parent = 
+      match parent with None -> None | Some (x : jsobj) -> Some (x # v) in
+    let cls = mkobjops (new jsobj) active in
+    new jsobj cx (Val.create cx ?proto ?parent cls)
 
-  method new_object ?proto () =
-    let proto = 
-      match proto with None -> None | Some (x : jsobj) -> Some (x # v) in
-    new jsobj cx (Val.create cx ?proto ())
+  method new_child ?proto ?active () =
+    this # new_object_gen ?proto ~parent:(this :> jsobj) ?active ()
+
+  method new_object ?proto ?active () =
+    this # new_object_gen ?proto ?active ()
 
   method eval s = new jsobj cx (eval_script cx o s)
 
@@ -158,12 +182,15 @@ class jsobj cx o = object(this:'this)
   method version = Ctx.version cx
   method set_version v = Ctx.set_version cx v
 
-  method new_context = 
-    let cx = Ctx.create (Ctx.runtime cx) in
+  method new_context ?active () = 
+    let cx = Ctx.create (Ctx.runtime cx) (mkobjops (new jsobj) active) in
     new jsobj cx (Val.get_global cx)
+
 end
 
 let global_obj cx = new jsobj cx (Val.get_global cx)
-let new_global_obj () = global_obj (Ctx.create (Rt.create ()))
+let new_global_obj ?active () = global_obj (Ctx.create 
+					      (Rt.create ())
+					      (mkobjops (new jsobj) active))
 
 external implementation_version: unit -> string = "caml_js_implementation_version"

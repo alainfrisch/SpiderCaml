@@ -23,14 +23,34 @@ let rec main_loop glb =
      | End_of_file -> raise Exit);
   main_loop glb
 
+let mk_active () =
+  let echo = ref false in
+  let getter prop v = 
+    if !echo then Printf.printf "Getting prop %s\n" prop;
+    v
+  and setter prop v =
+    (match prop with
+       | "echo" ->
+	   let b = v # to_bool in
+	   Printf.printf "echo is now %b\n" b;
+	   echo := b;
+       | _ -> ());
+    v
+  in
+  { getter = getter; setter = setter }
+
+
 let () =
   print_endline "This is a demonstration of SpiderCaml.";
   Printf.printf "SpiderMonkey implementation: %s\n" (implementation_version());
-  Printf.printf "built-in functions: exit,print\n";
-  let glb = new_global_obj () in
+  Printf.printf "built-in functions: exit,print,new_active\n";
+  Printf.printf "set echo to true on active objects to trace access to their properties\n";
+  
+  let glb = new_global_obj ~active:(mk_active()) () in
   let def name f =
     glb # set name (glb # lambda ~name f) in
   def "exit" (fun _ _ -> raise Exit);
+  def "new_active" (fun g _ -> g # new_object ~active:(mk_active ()) ());
   def "print" (fun g a ->
 		 for i = 0 to Array.length a - 1 do
 		   Printf.printf "[%i] %s\n" i (a.(i) # to_string);

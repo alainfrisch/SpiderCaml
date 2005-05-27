@@ -19,9 +19,29 @@
     (actually, only calling closures and registering new ones
     is prohibited).  An exception [RuntimeDestroyed] is raised
     when this rule is broken. *)
-   
+
 
 type jsval
+  (** Internal use. *)
+
+type 'a active = {
+  setter: string -> 'a -> 'a;
+  getter: string -> 'a -> 'a;
+}
+    (** Active objects can intercept access to their properties.
+
+	The [setter] function is called when a property is written.
+	The first argument is the property name
+	and the second argument is the new value for the property.
+	The function can perform arbitrary side effects
+	and choose another value for the property.
+
+	Similarly, the [getter] function is called when a property
+	is read. The second argument is the current value for the property
+	and the result is the actual value returned for the read operation. *)
+	
+	
+
 
 (** Encapsulation of Javascript values. *)
 class type jsobj = object
@@ -50,11 +70,14 @@ class type jsobj = object
 
   (** Creation of values. *)
 
-  method new_child : ?proto:jsobj -> unit -> jsobj
+  method new_child : ?proto:jsobj -> ?active:(jsobj active) -> unit -> jsobj
     (** Create a new object whose parent is the current object.
 	Raise [InvalidType] if the value is not an object. *)
-  method new_object : ?proto:jsobj -> unit -> jsobj
+  method new_object : ?proto:jsobj -> ?active:(jsobj active) -> unit -> jsobj
     (** Create a new object with no parent.
+	Raise [InvalidType] if the value is not an object. *)
+  method new_object_gen : ?proto:jsobj -> ?parent:jsobj -> ?active:(jsobj active) -> unit -> jsobj
+    (** Create a new object with a specific parent.
 	Raise [InvalidType] if the value is not an object. *)
 
   method lambda : ?name:string -> (jsobj -> jsobj array -> jsobj) -> jsobj
@@ -115,7 +138,7 @@ class type jsobj = object
 	runtime. After calling it, it is no longer possible to
 	create or to call closures in this runtime. *)
 
-  method new_context : jsobj
+  method new_context : ?active:jsobj active -> unit -> jsobj
     (** Create a new evaluation context with a fresh global object,
 	in the same runtime. Values can be exchanged between contexts 
 	of the same runtime. *)
@@ -134,7 +157,7 @@ class type jsobj = object
   method v : jsval
 end
 
-val new_global_obj : unit -> jsobj
+val new_global_obj : ?active:(jsobj active) -> unit -> jsobj
   (** Create a new global object. *)
 
 val implementation_version : unit -> string
