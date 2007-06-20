@@ -1,0 +1,6 @@
+0.2
+  * Print 'undefined' instead of 'void'
+  * Active objects
+  * Bug fixes in the C stub
+
+0.1  Initial release

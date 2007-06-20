@@ -1,6 +1,6 @@
 SOURCES= spiderCaml_stubs.c spiderCaml.mli spiderCaml.ml
-CLIBS = smjs
-CFLAGS = -Wall -I /usr/include/smjs
+CLIBS = mozjs
+CFLAGS = -Wall -I /usr/include/mozjs
 RESULT = spiderCaml
 CC = gcc
 
@@ -21,7 +21,7 @@ clean::
 
 clean:: clean-doc
 
-PACKAGE = SpiderCaml-0.1
+PACKAGE = SpiderCaml-0.2
 .PHONY: package
 package: clean
 	(cd ..; cp -aR SpiderCaml $(PACKAGE); \
