@@ -1,15 +1,7 @@
-SOURCES= spiderCaml_stubs.c spiderCaml.mli spiderCaml.ml
-CLIBS = mozjs
-CFLAGS = -Wall -I /usr/include/mozjs
-RESULT = spiderCaml
-CC = gcc
+-include Makefile.conf
 
-LIBINSTALL_FILES = \
-  spiderCaml.cmi \
-  spiderCaml.mli \
-  spiderCaml.cma libspiderCaml_stubs.a \
-  $(wildcard dllspiderCaml_stubs.so) \
-  $(wildcard spiderCaml.cmxa) $(wildcard spiderCaml.a)
+SOURCES= spiderCaml_stubs.c spiderCaml.mli spiderCaml.ml
+RESULT = spiderCaml
 
 all: byte-code-library
 opt: native-code-library
@@ -36,3 +28,10 @@ release:
 	mv doc/spiderCaml/html ../public_html/SpiderCaml/doc
 
 -include OCamlMakefile
+
+LIBINSTALL_FILES = \
+  spiderCaml.cmi \
+  spiderCaml.mli \
+  spiderCaml.cma $(RES_CLIB) \
+  $(wildcard $(DLLSONAME)) \
+  $(wildcard spiderCaml.cmxa) $(wildcard spiderCaml.$(EXT_LIB))

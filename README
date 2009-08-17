@@ -26,7 +26,7 @@ Compilation
 
 SpiderCaml depends on an already installed SpiderMonkey. Debian
 users can use the libsmjs-dev package. Otherwise, you may need to
-modify the library name and location in Makefile.
+modify the library name and location in Makefile.conf.
 
   make all
   make opt

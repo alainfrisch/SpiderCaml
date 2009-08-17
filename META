@@ -1,4 +1,4 @@
-version = "0.1"
+version = "0.2"
 description = "Bindings to SpiderMonkey's Javascript implementation"
 archive(byte) = "spiderCaml.cma"
 archive(native) = "spiderCaml.cmxa"
