@@ -68,6 +68,11 @@ class type jsobj = object
     (** Set the value of a numeric property.  Raise [InvalidType]
 	if the value is not an object. *)
 
+  method enumerate : jsobj list
+    (** Return all the enumerable properties of this object (but
+  not any from the prototype).  Raise [InvalidType] if the value
+  is not an object. *)
+
   (** Creation of values. *)
 
   method new_child : ?proto:jsobj -> ?active:(jsobj active) -> unit -> jsobj

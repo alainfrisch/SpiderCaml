@@ -85,6 +85,7 @@ module Val = struct
   external get_prop: Ctx.t -> t -> string -> t = "caml_js_get_prop"
   external set_elem: Ctx.t -> t -> int -> t -> unit = "caml_js_set_elem"
   external get_elem: Ctx.t -> t -> int -> t = "caml_js_get_elem"
+  external enumerate: Ctx.t -> t -> t list = "caml_js_enumerate"
   external create: Ctx.t -> ?proto:t -> ?parent:t -> 
     objops option -> t = "caml_js_new_object"
 
@@ -119,6 +120,7 @@ class jsobj cx o = object(this:'this)
   method get n = new jsobj cx (Val.get_prop cx o n)
   method set_idx n (v : jsobj) = Val.set_elem cx o n (v#v)
   method get_idx n = new jsobj cx (Val.get_elem cx o n)
+  method enumerate = List.map (fun v -> new jsobj cx v) (Val.enumerate cx o)
 
   method new_object_gen ?proto ?parent ?active () =
     let proto = 

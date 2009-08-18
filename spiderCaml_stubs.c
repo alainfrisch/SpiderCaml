@@ -585,8 +585,29 @@ CAMLprim value caml_js_get_elem(value cx, value obj, value idx){
   CAMLreturn(jsval_to_caml(rt,ret));
 }
 
-
-
+CAMLprim value caml_js_enumerate(value cx, value obj){
+  CAMLparam2(cx,obj);
+  CAMLlocal2(res,elt);
+  JSContext *ctx = get_ctx(cx);
+  JSRuntime *rt = JS_GetRuntime(ctx);
+  JSIdArray *props = JS_Enumerate(ctx, unwrap_obj(rt,obj));
+  jsval val;
+  jsid *ptr, *head;
+  res = Val_int(0);
+  head = ptr = props->vector;
+  ptr += (props->length - 1);
+  while (ptr >= head) {
+    if (JS_IdToValue(ctx,*ptr,&val)) {
+      elt = res;
+      res = caml_alloc(2,0);
+      Store_field(res, 0, jsval_to_caml(rt,val));
+      Store_field(res, 1, elt);
+    }
+    ptr--;
+  }
+  JS_DestroyIdArray(ctx, props);
+  CAMLreturn(res);
+}
 
 
 CAMLprim value caml_js_new_object(value cx, value proto, value parent, value ops){
