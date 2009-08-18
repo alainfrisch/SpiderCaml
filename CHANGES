@@ -1,3 +1,6 @@
+Since 0.2
+  * Bind the enumerate method (patch from David Allsopp).
+
 0.2
   * Print 'undefined' instead of 'void'
   * Active objects
